@@ -165,7 +165,7 @@ python -c "
 import sys
 import torch
 # Test individual operator imports
-from mmdet3d_plugin.ops.bev_pool_v2.bev_pool_ext import bev_pool_v2_forward
+from mmdet3d_plugin.ops.bev_pool_v2.bev_pool_v2_ext import bev_pool_v2_forward
 from mmdet3d_plugin.ops.bev_pool.bev_pool_ext import bev_max_pool_forward
 from mmdet3d_plugin.ops.nearest_assign.nearest_assign_ext import nearest_assign_forward
 print('✅ All XPU operators loaded successfully!')
