@@ -5,6 +5,7 @@ import warnings
 
 import mmcv
 import torch
+import torch.distributed as dist
 from mmcv import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
@@ -193,12 +194,39 @@ def main():
     else:
         cfg.gpu_ids = [args.gpu_id]
 
+    # Detect XPU and oneCCL availability early so it can be used before
+    # initializing distributed. This allows us to handle single-process
+    # torchrun launches correctly when oneCCL is missing.
+    xpu_available = hasattr(torch, 'xpu') and torch.xpu.is_available()
+    ccl_available = False
+    try:
+        ccl_available = 'ccl' in dist.Backend.backend_type_map
+    except Exception:
+        ccl_available = False
+
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False
     else:
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)
+        # If we're running under torchrun (distributed) but there's only a
+        # single process (world_size == 1) and XPU is present but oneCCL
+        # is not available, prefer to run the single-process XPU path
+        # instead of using CPU DDP. This avoids calling XPU-only native
+        # ops (like bev_pool_v2 extension) with CPU tensors which causes
+        # "Tensors must be on XPU device" runtime errors.
+        try:
+            rank, world_size = get_dist_info()
+            if world_size == 1 and xpu_available and not ccl_available:
+                warnings.warn(
+                    'Distributed launcher detected with a single process; '
+                    'running single-process XPU inference because oneCCL '
+                    'is not available.')
+                distributed = False
+        except Exception:
+            # If we can't query dist info, continue with the previous value.
+            pass
 
     test_dataloader_default_args = dict(
         samples_per_gpu=1, workers_per_gpu=2, dist=distributed, shuffle=False)
@@ -255,14 +283,46 @@ def main():
         # segmentation dataset has `PALETTE` attribute
         model.PALETTE = dataset.PALETTE
 
+    # Determine target device: prefer XPU only when oneCCL (ccl) is available
+    # (xpu_available and ccl_available are detected earlier)
+
     if not distributed:
-        model = MMDataParallel(model, device_ids=cfg.gpu_ids)
-        outputs = single_gpu_test(model, data_loader, args.show, args.show_dir)
+        if xpu_available:
+            # move model to XPU for inference (works with or without CCL in single-process mode)
+            try:
+                model = model.to('xpu')
+            except Exception:
+                pass
+            # Wrap with MMDataParallel (no device_ids) to maintain .module attribute expected by test API
+            model = MMDataParallel(model, device_ids=None)
+            outputs = single_gpu_test(model, data_loader, args.show,
+                                      args.show_dir)
+        else:
+            # fallback to CPU/GPU single process
+            model = MMDataParallel(model, device_ids=cfg.gpu_ids)
+            outputs = single_gpu_test(model, data_loader, args.show,
+                                      args.show_dir)
     else:
-        model = MMDistributedDataParallel(
-            model.cuda(),
-            device_ids=[torch.cuda.current_device()],
-            broadcast_buffers=False)
+        # distributed mode
+        if xpu_available and ccl_available:
+            # proper XPU distributed path
+            try:
+                model = model.to('xpu')
+            except Exception:
+                pass
+            model = MMDistributedDataParallel(
+                model,
+                device_ids=None,
+                broadcast_buffers=False)
+        else:
+            # oneCCL not available: run distributed on CPU with gloo
+            import warnings as _warnings
+            if xpu_available and not ccl_available:
+                _warnings.warn('XPU detected but oneCCL (ccl) is not available; running distributed on CPU with gloo backend.')
+            # Ensure model is on CPU and wrap with torch DDP (works with gloo)
+            from torch.nn.parallel import DistributedDataParallel as DDP
+            model = DDP(model)
+
         outputs = multi_gpu_test(model, data_loader, args.tmpdir,
                                  args.gpu_collect)
 
