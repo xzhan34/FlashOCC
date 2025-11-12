@@ -57,9 +57,11 @@ python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'XPU ava
 
 ```bash
 # Install compatible numpy (for numba)
-pip install numpy==1.21.6
+pip install numpy==1.23.5
 
 # Install mmdetection dependencies (without mmcv-full)
+pip install mmdet==2.25.1
+pip install mmsegmentation==0.25.0
 pip install addict
 pip install yapf==0.40.1
 pip install opencv-python
@@ -136,12 +138,12 @@ export CC=$(which icx)
 # Build main operators (bev_pool, nearest_assign)
 cd projects
 pip install -e . --no-build-isolation --no-deps
-#python setup_xpu.py build_ext --inplace
+#python setup.py build_ext --inplace
 
 # Build DVR operator
 cd ../lib/dvr
 pip install -e . --no-build-isolation --no-deps
-#python setup_xpu.py build_ext --inplace
+#python setup.py build_ext --inplace
 python -m pip install -e .--no-deps --no-build-isolation
 
 
