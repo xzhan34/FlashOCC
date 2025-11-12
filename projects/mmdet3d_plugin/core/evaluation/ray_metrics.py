@@ -4,13 +4,13 @@ import math
 import copy
 import numpy as np
 import torch
-from torch.utils.cpp_extension import load
 from tqdm import tqdm
 from prettytable import PrettyTable
 from .ray_pq import Metric_RayPQ
 
+# Import the pre-compiled SYCL operator
+import dvr
 
-dvr = load("dvr", sources=["lib/dvr/dvr.cpp", "lib/dvr/dvr.cu"], verbose=True, extra_cuda_cflags=['-allow-unsupported-compiler'])
 _pc_range = [-40, -40, -1.0, 40, 40, 5.4]
 _voxel_size = 0.4
 
