@@ -1,21 +1,23 @@
 // Copyright (c) Phigent Robotics. All rights reserved.
 // Reference https://arxiv.org/abs/2211.17111
+// Modified for Intel XPU with SYCL
 #include <torch/torch.h>
-#include <c10/cuda/CUDAGuard.h>
+#include <sycl/sycl.hpp>
 
-// CUDA function declarations
+// SYCL function declarations
 void bev_pool_v2(int c, int n_intervals, const float* depth, const float* feat,
     const int* ranks_depth, const int* ranks_feat, const int* ranks_bev,
-    const int* interval_starts, const int* interval_lengths, float* out);
+    const int* interval_starts, const int* interval_lengths, float* out,
+    sycl::queue& q);
 
 void bev_pool_v2_grad(int c, int n_intervals, const float* out_grad,
   const float* depth, const float* feat, const int* ranks_depth, const int* ranks_feat,
   const int* ranks_bev, const int* interval_starts, const int* interval_lengths,
-  float* depth_grad, float* feat_grad);
+  float* depth_grad, float* feat_grad, sycl::queue& q);
 
 
 /*
-  Function: pillar pooling (forward, cuda)
+  Function: pillar pooling (forward, XPU with SYCL)
   Args:
     depth            : input depth, FloatTensor[n, d, h, w]
     feat             : input features, FloatTensor[n, h, w, c]
@@ -39,7 +41,13 @@ void bev_pool_v2_forward(
 ) {
   int c = _feat.size(4);
   int n_intervals = _interval_lengths.size(0);
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(_depth));
+
+  // Get XPU device and create SYCL queue
+  auto device = _depth.device();
+  TORCH_CHECK(device.is_xpu(), "Tensors must be on XPU device");
+
+  sycl::queue q = sycl::queue(sycl::gpu_selector{});
+
   const float* depth = _depth.data_ptr<float>();
   const float* feat = _feat.data_ptr<float>();
   const int* ranks_depth = _ranks_depth.data_ptr<int>();
@@ -52,13 +60,13 @@ void bev_pool_v2_forward(
   float* out = _out.data_ptr<float>();
   bev_pool_v2(
     c, n_intervals, depth, feat, ranks_depth, ranks_feat,
-    ranks_bev, interval_starts, interval_lengths, out
+    ranks_bev, interval_starts, interval_lengths, out, q
   );
 }
 
 
 /*
-  Function: pillar pooling (backward, cuda)
+  Function: pillar pooling (backward, XPU with SYCL)
   Args:
     out_grad         : grad of output bev feature, FloatTensor[b, c, h_out, w_out]
     depth_grad       : grad of input depth, FloatTensor[n, d, h, w]
@@ -85,7 +93,13 @@ void bev_pool_v2_backward(
 ) {
   int c = _out_grad.size(4);
   int n_intervals = _interval_lengths.size(0);
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(_out_grad));
+
+  // Get XPU device and create SYCL queue
+  auto device = _out_grad.device();
+  TORCH_CHECK(device.is_xpu(), "Tensors must be on XPU device");
+
+  sycl::queue q = sycl::queue(sycl::gpu_selector{});
+
   const float* out_grad = _out_grad.data_ptr<float>();
   float* depth_grad = _depth_grad.data_ptr<float>();
   float* feat_grad = _feat_grad.data_ptr<float>();
@@ -99,7 +113,7 @@ void bev_pool_v2_backward(
 
   bev_pool_v2_grad(
     c, n_intervals, out_grad, depth, feat, ranks_depth, ranks_feat,
-    ranks_bev, interval_starts, interval_lengths, depth_grad, feat_grad
+    ranks_bev, interval_starts, interval_lengths, depth_grad, feat_grad, q
   );
 }
 
