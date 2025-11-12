@@ -69,38 +69,14 @@ pip install terminaltables
 # Install other dependencies
 pip install lyft_dataset_sdk
 pip install networkx==2.2
-pip install numba==0.56.4 #xpu
+pip install numba==0.56.4 #xpu, 0.55.0
 pip install nuscenes-devkit
 pip install plyfile
 pip install scikit-image
 pip install tensorboard
 pip install trimesh==2.35.39
-pip install setuptools==59.5.0
-```
 
-
-pip install mmdet==2.25.1
-pip install mmsegmentation==0.25.0
-
-sudo apt-get install python3-dev 
-sudo apt-get install libevent-dev
-sudo apt-get groupinstall 'development tools'
-export PATH=/usr/local/cuda/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-export CUDA_ROOT=/usr/local/cuda
-pip install pycuda
-
-pip install lyft_dataset_sdk
-pip install networkx==2.2
-pip install numba==0.55.0
-pip install numpy==1.21.6
-pip install nuscenes-devkit
-pip install plyfile
-pip install scikit-image
-pip install tensorboard
-pip install trimesh==2.35.39
-#pip install setuptools==59.5.0
-pip install yapf==0.40.1
+pip install pyyaml
 pip install PyYAML
 
 # Load oneAPI environment
