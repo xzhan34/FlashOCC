@@ -242,25 +242,26 @@ class BEVDet4D(BEVDet):
         # key_ego --> global  (B, 1, 1, 4, 4)
         keyego2global = ego2globals[:, 0, 0, ...].unsqueeze(1).unsqueeze(1)
         # global --> key_ego  (B, 1, 1, 4, 4)
-        global2keyego = torch.inverse(keyego2global.double())
+        # Use float32 instead of float64 for XPU compatibility
+        global2keyego = torch.inverse(keyego2global.float())
         # sensor --> ego --> global --> key_ego
         sensor2keyegos = \
-            global2keyego @ ego2globals.double() @ sensor2egos.double()     # (B, N_frames, N_views, 4, 4)
-        sensor2keyegos = sensor2keyegos.float()
+            global2keyego @ ego2globals.float() @ sensor2egos.float()     # (B, N_frames, N_views, 4, 4)
 
         # --------------------  for stereo --------------------------
         curr2adjsensor = None
         if stereo:
             # (B, N_frames, N_views, 4, 4),  (B, N_frames, N_views, 4, 4)
             sensor2egos_cv, ego2globals_cv = sensor2egos, ego2globals
+            # Use float32 instead of float64 for XPU compatibility
             sensor2egos_curr = \
-                sensor2egos_cv[:, :self.temporal_frame, ...].double()   # (B, N_temporal=2, N_views, 4, 4)
+                sensor2egos_cv[:, :self.temporal_frame, ...].float()   # (B, N_temporal=2, N_views, 4, 4)
             ego2globals_curr = \
-                ego2globals_cv[:, :self.temporal_frame, ...].double()   # (B, N_temporal=2, N_views, 4, 4)
+                ego2globals_cv[:, :self.temporal_frame, ...].float()   # (B, N_temporal=2, N_views, 4, 4)
             sensor2egos_adj = \
-                sensor2egos_cv[:, 1:self.temporal_frame + 1, ...].double()    # (B, N_temporal=2, N_views, 4, 4)
+                sensor2egos_cv[:, 1:self.temporal_frame + 1, ...].float()    # (B, N_temporal=2, N_views, 4, 4)
             ego2globals_adj = \
-                ego2globals_cv[:, 1:self.temporal_frame + 1, ...].double()    # (B, N_temporal=2, N_views, 4, 4)
+                ego2globals_cv[:, 1:self.temporal_frame + 1, ...].float()    # (B, N_temporal=2, N_views, 4, 4)
 
             # curr_sensor --> curr_ego --> global --> prev_ego --> prev_sensor
             curr2adjsensor = \
