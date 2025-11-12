@@ -1,19 +1,22 @@
 // Copyright (c) Phigent Robotics. All rights reserved.
 // Reference https://arxiv.org/abs/2211.17111
+// Modified for Intel XPU with SYCL
 #include <torch/torch.h>
-#include <c10/cuda/CUDAGuard.h>
+#include <sycl/sycl.hpp>
 
-// CUDA function declarations
-void nearest_assign(
-                    const int* l2s_key,
+using namespace sycl;
+
+// SYCL function declarations
+void nearest_assign(const int* l2s_key,
                     int l2s_size,
-                    const int *__restrict__ occind2detind,
+                    const int *occind2detind,
                     int inst_size,
-                    const int *__restrict__ occ_pred,
-                    const int *__restrict__ inst_xyz,
-                    const int *__restrict__ inst_cls,
-                    const int *__restrict__ inst_id_list,
-                    int* __restrict__ inst_pred);
+                    const int *occ_pred,
+                    const int *inst_xyz,
+                    const int *inst_cls,
+                    const int *inst_id_list,
+                    int* inst_pred,
+                    sycl::queue& q);
 
 void nearest_assign_forward(
   const at::Tensor _occ_pred,    // (200, 200, 16)
@@ -26,17 +29,18 @@ void nearest_assign_forward(
 ) {
   int l2s_size = _l2s_key.size(0);
   int inst_size = _inst_xyz.size(0);
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(_occ_pred));
+
+  // Get XPU device and create SYCL queue
+  auto device = _occ_pred.device();
+  TORCH_CHECK(device.is_xpu(), "Tensors must be on XPU device");
+  sycl::queue q = sycl::queue(sycl::gpu_selector{});
+
   const int* occ_pred = _occ_pred.data_ptr<int>();
   const int* inst_xyz = _inst_xyz.data_ptr<int>();
   const int* inst_cls = _inst_cls.data_ptr<int>();
   const int* l2s_key = _l2s_key.data_ptr<int>();
   const int* inst_id_list = _inst_id_list.data_ptr<int>();
   const int* occind2detind = _occind2detind.data_ptr<int>();
-  // std::map<int, int> l2s;
-  // for (int l2s_ind = 0; l2s_ind < l2s_size; l2s_ind++){
-  //   l2s.insert(pair<int, int>(l2s_key[l2s_ind], l2s_val[l2s_ind]));
-  // }
 
   int* inst_pred = _inst_pred.data_ptr<int>();
   nearest_assign(
@@ -48,7 +52,8 @@ void nearest_assign_forward(
                  inst_xyz,
                  inst_cls,
                  inst_id_list,
-                 inst_pred
+                 inst_pred,
+                 q
                  );
 }
 
