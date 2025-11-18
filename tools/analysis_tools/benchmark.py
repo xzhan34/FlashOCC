@@ -1,8 +1,12 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import sys
+import os
+
+# Add current working directory to path before other imports
+sys.path.insert(0, os.getcwd())
+
 import argparse
 import time
-import os
 import torch
 from mmcv import Config
 from mmcv.parallel import MMDataParallel
@@ -12,7 +16,6 @@ from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_detector
 from tools.misc.fuse_conv_bn import fuse_module
 
-sys.path.insert(0, os.getcwd())
 print(sys.path)
 
 
@@ -44,9 +47,23 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # Detect and set device (XPU for Intel BMG B60)
+    if torch.xpu.is_available():
+        device = 'xpu'
+        device_id = 0
+        print(f'Using Intel XPU device: {torch.xpu.get_device_name(device_id)}')
+    elif torch.cuda.is_available():
+        device = 'cuda'
+        device_id = 0
+        print(f'Using CUDA device: {torch.cuda.get_device_name(device_id)}')
+    else:
+        device = 'cpu'
+        device_id = None
+        print('Using CPU device')
+
     cfg = Config.fromfile(args.config)
-    # set cudnn_benchmark
-    if cfg.get('cudnn_benchmark', False):
+    # set cudnn_benchmark (only relevant for CUDA)
+    if cfg.get('cudnn_benchmark', False) and device == 'cuda':
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
     cfg.data.test.test_mode = True
@@ -96,7 +113,13 @@ def main():
     if args.fuse_conv_bn:
         model = fuse_module(model)
 
-    model = MMDataParallel(model, device_ids=[0])
+    # Move model to appropriate device
+    if device == 'xpu':
+        model = MMDataParallel(model.xpu(), device_ids=[device_id])
+    elif device == 'cuda':
+        model = MMDataParallel(model.cuda(), device_ids=[device_id])
+    else:
+        model = MMDataParallel(model, device_ids=None)
 
     model.eval()
 
@@ -113,16 +136,26 @@ def main():
     #     data = copy.deepcopy(data_ori)
     for i, data in enumerate(data_loader):
 
-        torch.cuda.synchronize()
+        # Synchronize device before timing
+        if device == 'xpu':
+            torch.xpu.synchronize()
+        elif device == 'cuda':
+            torch.cuda.synchronize()
+
         start_time = time.perf_counter()
 
         with torch.no_grad():
-            model(return_loss=False, rescale=True, 
+            model(return_loss=False, rescale=True,
                   w_pano=args.w_pano,
                   w_panoproc=args.w_panoproc,
                   **data)
 
-        torch.cuda.synchronize()
+        # Synchronize device after inference
+        if device == 'xpu':
+            torch.xpu.synchronize()
+        elif device == 'cuda':
+            torch.cuda.synchronize()
+
         elapsed = time.perf_counter() - start_time
 
         if i >= num_warmup:
