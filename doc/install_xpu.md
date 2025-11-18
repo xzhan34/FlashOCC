@@ -93,12 +93,9 @@ git clone https://github.com/xzhan34/mmcv.git -b xpu
 
 export MMCV_WITH_OPS=1 
 export FORCE_XPU=1
-export TORCH_CUDA_ARCH_LIST="XPU"
 export CXX=$(which icpx)
 export CC=$(which icx)
-export PYTORCH_BUILD_VERSION_GE_1_13=1
-export TORCH_EXTENSIONS_IGNORE_ABI_COMPATIBILITY=1
-CC=icx CXX=icpx python -m pip install -e . --no-build-isolation --no-deps
+python -m pip install -e . --no-build-isolation --no-deps
 export PYTHONPATH=`pwd`:$PYTHONPATH
 
 python -c "import mmcv; import mmcv._ext; print('mmcv._ext loaded')"
@@ -114,7 +111,7 @@ python -c "import mmcv; import mmcv._ext; print('mmcv._ext loaded')"
 ```bash
 # Clone FlashOCC
 cd ~/work
-git clone https://github.com/Yzichen/FlashOCC.git
+git clone https://github.com/xzhan34/FlashOCC.git -b xpu
 cd FlashOCC
 
 # Clone mmdetection3d (compatible version)
@@ -192,6 +189,11 @@ python tools/create_data_bevdet.py
 # Download occupancy GT from CVPR2023-3D-Occupancy-Prediction
 # Place in data/nuscenes/gts/
 ```
+
+### Step 8: to measure inference peforamnce data (fps)
+
+python tools/analysis_tools/benchmark.py projects/configs/flashocc/flashocc-r50.py ckpts/flashocc-r50-256x704.pth --samples 500 --log-interval 50
+
 
 ## Alternative: Minimal Installation (Operators Only)
 
