@@ -161,15 +161,26 @@ class TRTBEVPoolv2(torch.autograd.Function):
 
 
 def test_bev_pool_v2():
+    # Auto-detect device: XPU > CUDA > CPU
+    if torch.xpu.is_available():
+        device = 'xpu'
+        print("Using Intel XPU device")
+    elif torch.cuda.is_available():
+        device = 'cuda'
+        print("Using CUDA device")
+    else:
+        device = 'cpu'
+        print("Using CPU device")
+
     depth = np.array([0.3, 0.4, 0.2, 0.1, 0.7, 0.6, 0.8, 0.9])
-    depth = torch.from_numpy(depth).float().cuda()
+    depth = torch.from_numpy(depth).float().to(device)
     depth = depth.view(1, 1, 2, 2, 2).requires_grad_()
     feat = torch.ones(
         size=[1, 1, 2, 2, 2], dtype=torch.float,
-        device='cuda').requires_grad_()
-    ranks_depth = torch.from_numpy(np.array([0, 4, 1, 6])).int().cuda()
-    ranks_feat = torch.from_numpy(np.array([0, 0, 1, 2])).int().cuda()
-    ranks_bev = torch.from_numpy(np.array([0, 0, 1, 1])).int().cuda()
+        device=device).requires_grad_()
+    ranks_depth = torch.from_numpy(np.array([0, 4, 1, 6])).int().to(device)
+    ranks_feat = torch.from_numpy(np.array([0, 0, 1, 2])).int().to(device)
+    ranks_bev = torch.from_numpy(np.array([0, 0, 1, 1])).int().to(device)
 
     kept = torch.ones(
         ranks_bev.shape[0], device=ranks_bev.device, dtype=torch.bool)
@@ -187,8 +198,13 @@ def test_bev_pool_v2():
     assert loss == 4.4
     grad_depth = np.array([2., 2., 0., 0., 2., 0., 2., 0.])
     grad_depth = torch.from_numpy(grad_depth).float()
-    grad_depth = grad_depth.cuda().view(1, 1, 2, 2, 2)
+    grad_depth = grad_depth.to(device).view(1, 1, 2, 2, 2)
     assert depth.grad.allclose(grad_depth)
     grad_feat = np.array([1.0, 1.0, 0.4, 0.4, 0.8, 0.8, 0., 0.])
-    grad_feat = torch.from_numpy(grad_feat).float().cuda().view(1, 1, 2, 2, 2)
+    grad_feat = torch.from_numpy(grad_feat).float().to(device).view(1, 1, 2, 2, 2)
     assert feat.grad.allclose(grad_feat)
+
+"""python -m projects.mmdet3d_plugin.ops.bev_pool_v2.bev_pool"""
+if __name__ == '__main__':
+        test_bev_pool_v2()
+        print("BEV Pool v2 test passed!")
