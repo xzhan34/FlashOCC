@@ -192,3 +192,8 @@ def test_bev_pool_v2():
     grad_feat = np.array([1.0, 1.0, 0.4, 0.4, 0.8, 0.8, 0., 0.])
     grad_feat = torch.from_numpy(grad_feat).float().cuda().view(1, 1, 2, 2, 2)
     assert feat.grad.allclose(grad_feat)
+
+"""python -m projects.mmdet3d_plugin.ops.bev_pool_v2.bev_pool"""
+if __name__ == '__main__':
+        test_bev_pool_v2()
+        print("BEV Pool v2 test passed!")
